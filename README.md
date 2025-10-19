@@ -129,4 +129,109 @@ You should see tokens streaming. Cache directories:
 
 * Weights: `C:\Users\<you>\AppData\Local\mlc_llm\model_weights\hf\...`
 * Compiled DLLs: `C:\Users\<you>\AppData\Local\mlc_llm\model_lib\...`
+---
+
+## 8) Serve an OpenAI-Compatible API
+
+```powershell
+mlc_llm serve HF://mlc-ai/Qwen2.5-0.5B-Instruct-q4f16_1-MLC --device vulkan --host 0.0.0.0 --port 8000
+```
+
+**PowerShell API call (recommended):**
+
+```powershell
+$body = @{
+  model = "HF://mlc-ai/Qwen2.5-0.5B-Instruct-q4f16_1-MLC"
+  messages = @(@{ role="user"; content="Say hi in one short sentence." })
+  max_tokens = 128
+} | ConvertTo-Json -Depth 10
+
+$resp = Invoke-RestMethod -Uri "http://127.0.0.1:8000/v1/chat/completions" `
+  -Method POST -ContentType "application/json" -Body $body -TimeoutSec 1800
+
+$resp.choices[0].message.content
+```
+
+**Python (OpenAI SDK):**
+
+```python
+from openai import OpenAI
+client = OpenAI(base_url="http://127.0.0.1:8000/v1", api_key="mlc-llm")
+
+resp = client.chat.completions.create(
+    model="HF://mlc-ai/Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
+    messages=[{"role": "user", "content": "Summarize MLC-LLM in one line."}],
+    max_tokens=200,
+)
+print(resp.choices[0].message.content)
+```
+
+**Node.js (OpenAI SDK):**
+
+```js
+import OpenAI from "openai";
+const client = new OpenAI({ baseURL: "http://127.0.0.1:8000/v1", apiKey: "mlc-llm" });
+
+const resp = await client.chat.completions.create({
+  model: "HF://mlc-ai/Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
+  messages: [{ role: "user", content: "Explain this server in one sentence." }],
+  max_tokens: 200,
+});
+console.log(resp.choices[0].message.content);
+```
+
+**Streaming (curl.exe, PowerShell):**
+
+```powershell
+$body = @{
+  model = "HF://mlc-ai/Qwen2.5-0.5B-Instruct-q4f16_1-MLC"
+  stream = $true
+  messages = @(@{ role="user"; content="Stream a 10-word greeting." })
+  max_tokens = 200
+} | ConvertTo-Json -Depth 10
+
+curl.exe -N -X POST "http://127.0.0.1:8000/v1/chat/completions" ^
+  -H "Content-Type: application/json" ^
+  --data-binary "$body"
+```
+
+---
+
+## 9) Switch to a Bigger Model (optional)
+
+Re-enable downloads for first run:
+
+```powershell
+# session-only:
+$env:HF_HUB_OFFLINE = "0"
+
+# compile + chat once (downloads & JIT)
+mlc_llm chat HF://mlc-ai/Llama-3-8B-Instruct-q4f16_1-MLC --device vulkan
+
+# then serve:
+mlc_llm serve HF://mlc-ai/Llama-3-8B-Instruct-q4f16_1-MLC --device vulkan --host 0.0.0.0 --port 8000
+```
+
+---
+
+## 10) Offline & “No Surprises”
+
+After you’ve downloaded/compiled what you need:
+
+```powershell
+# Never download from HF again
+setx HF_HUB_OFFLINE 1
+
+# Never JIT-compile new binaries; only use cache
+setx MLC_JIT_POLICY READONLY
+```
+
+(These apply to **new** terminals.)
+
+Run fully local by pointing to a local model folder:
+
+```powershell
+mlc_llm chat "C:\Users\<you>\AppData\Local\mlc_llm\model_weights\hf\mlc-ai\Qwen2.5-0.5B-Instruct-q4f16_1-MLC" --device vulkan
+```
+
 
