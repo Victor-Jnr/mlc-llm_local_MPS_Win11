@@ -214,7 +214,7 @@ mlc_llm serve HF://mlc-ai/Llama-3-8B-Instruct-q4f16_1-MLC --device vulkan --host
 
 ---
 
-## 10) Offline & “No Surprises”
+## 10) Offline
 
 After you’ve downloaded/compiled what you need:
 
@@ -233,5 +233,100 @@ Run fully local by pointing to a local model folder:
 ```powershell
 mlc_llm chat "C:\Users\<you>\AppData\Local\mlc_llm\model_weights\hf\mlc-ai\Qwen2.5-0.5B-Instruct-q4f16_1-MLC" --device vulkan
 ```
+---
+
+## 11) One-Click Start Script
+
+Save as `start-mlc-api.bat`:
+
+```bat
+@echo off
+CALL %USERPROFILE%\miniconda3\Scripts\activate.bat
+CALL conda activate mlc
+
+REM ensure compilers are visible
+SET "PATH=C:\Program Files\LLVM\bin;C:\msys64\ucrt64\bin;%PATH%"
+
+REM offline? set to 1 after first run
+SET HF_HUB_OFFLINE=1
+
+REM pick your model here
+SET MLC_MODEL=HF://mlc-ai\Qwen2.5-0.5B-Instruct-q4f16_1-MLC
+REM SET MLC_MODEL=HF://mlc-ai\Llama-3-8B-Instruct-q4f16_1-MLC
+
+echo Serving %MLC_MODEL% at http://0.0.0.0:8000
+mlc_llm serve %MLC_MODEL% --device vulkan --host 0.0.0.0 --port 8000
+```
+
+---
+
+## 12) Troubleshooting
+
+**PowerShell says scripts disabled:**
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force`
+
+**`conda` not recognized after install:**
+Close & reopen PowerShell. Or:
+`& "$env:USERPROFILE\miniconda3\Scripts\conda.exe" init powershell`
+
+**TOS error creating env:**
+Run the three `conda tos accept ...` commands (see above).
+
+**`mlc_llm chat` fails with “clang not found”:**
+Install LLVM and ensure `C:\Program Files\LLVM\bin` is on PATH (User PATH & current session). `where clang` must show it.
+
+**“linker (via gcc) failed” or “ld not found”:**
+Install MSYS2 UCRT64 toolchain and ensure `C:\msys64\ucrt64\bin` is on PATH. `where gcc`, `where ld` must show them.
+
+**“Vulkan not found” or no GPU devices:**
+Update AMD driver; ensure `vulkan-loader` is installed in the `mlc` env. Reopen terminal.
+
+**Prevent any downloads:**
+`setx HF_HUB_OFFLINE 1`
+
+**Prevent any new JIT compiles:**
+`setx MLC_JIT_POLICY READONLY`
+
+**OOM or slow on first run:**
+Start with a tiny model (0.5B–3B). Close apps using VRAM (browsers/games).
+Use quantized builds (e.g., `q4f16_1`).
+
+**Where are caches?**
+Weights: `C:\Users\<you>\AppData\Local\mlc_llm\model_weights\hf\...`
+Compiled libs: `C:\Users\<you>\AppData\Local\mlc_llm\model_lib\...`
+
+**Open to LAN:**
+
+```powershell
+netsh advfirewall firewall add rule name="MLC LLM API 8000" dir=in action=allow protocol=TCP localport=8000
+```
+
+Then use `http://<your-ip>:8000/v1/...` from other devices.
+
+---
+
+## 13) Longer Replies (avoid truncation)
+
+Set a high `max_tokens` and a generous timeout:
+
+```powershell
+$body = @{
+  model      = "HF://mlc-ai/Qwen2.5-0.5B-Instruct-q4f16_1-MLC"
+  messages   = @(@{ role="user"; content="Tell me a very long story and finish naturally." })
+  max_tokens = 2000
+} | ConvertTo-Json -Depth 10
+
+$resp = Invoke-RestMethod -Uri "http://127.0.0.1:8000/v1/chat/completions" `
+  -Method POST -ContentType "application/json" -Body $body -TimeoutSec 1800
+
+$resp.choices[0].message.content
+$resp.choices[0].finish_reason  # "stop" is ideal; "length" means raise max_tokens
+```
+
+---
+
+### That’s it!
+
+
 
 
